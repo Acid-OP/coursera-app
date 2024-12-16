@@ -1,17 +1,26 @@
 const { Router} = require("express");
 const adminRouter = Router();
-const { adminModel }  = require("../db");
+const { adminModel, userModel, courseModel }  = require("../db");
+const  {JWT_ADMINKEY} = require("/..config");
+const jwt = require("jsonwebtoken");
+const bcrypt = require("bcrypt");
+const {z} = require("zod");
+const { adminMiddleware } = require("../middleware/admin");
 
 
 adminRouter.post("/signup",async function(req,res){
     // schema of zod
     const requiredbody = z.object({
         email: z.string().min(3).max(100).email(),
-        password: z.string().min(5).max(30)
+        password: z.string().min(5).max(30),
+        firstName: z.string().max(100),
+        lastName: z.string().max(100)
     })
     // input for signup
     const email = req.body.email;
     const password = req.body.password;
+    const firstName = req.body.firstName;
+    const lastName = req.body.lastName;
 
     const parseddatawithsuccess = requiredbody.safeParse(req.body);
 
@@ -27,12 +36,13 @@ adminRouter.post("/signup",async function(req,res){
 
     try{
     const hashedPassword = await bcrypt.hash(password,5);
-    await UdataModel.create({
+    await adminModel.create({
         email: email,
-        password: hashedPassword
+        password: hashedPassword,
+        firstName: firstName,
+        lastName: lastName
     });
-    const allUsers = await UdataModel.find();
-    console.log("All Users in Database:", allUsers);
+
     return sendResponse(res,200,"You are Signed up");
     } catch(e) {
         return sendResponse(res,500,"User already Exists");
@@ -41,30 +51,30 @@ adminRouter.post("/signup",async function(req,res){
      
 });
 
-adminRouter.post("/login", async function(req,res){
+adminRouter.post("/signin", async function(req,res){
     const email = req.body.email;
     const password = req.body.password;
 
     try{
-    const user = await UdataModel.findOne({
+    const admin = await adminModel.findOne({
         email:email
     })
-    if(!user) {
-        res.json({
+    if(!admin) {
+        return res.json({
             message: "user does not exist"
         })
     }
 
-    const passwordMatch = await bcrypt.compare(password , user.password);
+    const passwordMatch = await bcrypt.compare(password , admin.password);
     if(passwordMatch) {
         const token = jwt.sign({
-            id : user._id.toString()
-        }, JWT_SECRET);
-        res.json({
+            id : admin._id
+        }, JWT_ADMINKEY);
+        return res.json({
             token:token
         });
     } else{
-        res.status(403).json({
+        return res.status(403).json({
             message: "Incorrect Credentials"
         })
     }
@@ -78,9 +88,20 @@ adminRouter.post("/login", async function(req,res){
 });
 
 
-adminRouter.post("/" , function(req,res){
+adminRouter.post("/course" , adminMiddleware, async function(req,res){
+    const adminId = req.userId;
+    const {title , description , imageURl , price} = req.body;
+
+    const course = await courseModel.create({
+        title: title,
+        description: description,
+        imageUrl: imageURl,
+        price: price,
+        creatorId: adminId
+    })
     res.json({
-        message: "courses"
+        message: "course created",
+        courseId: course._id
     })
 });
 
@@ -90,13 +111,12 @@ adminRouter.put("/course" , function(req,res){
     })
 });
 
-adminRouter.get("/course-bulk" , function(req,res){
+adminRouter.get("/course/bulk" , function(req,res){
     res.json({
         message: "courses"
     })
 });
 
-
-module.exports = {
+module.exports= {
     adminRouter : adminRouter
 }
