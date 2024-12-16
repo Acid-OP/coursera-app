@@ -44,8 +44,6 @@ userRouter.post("/signup",async function(req,res){
         firstName: firstName,
         lastName: lastName
     });
-    // const allUsers = await userModel.find();
-    // console.log("All Users in Database:", allUsers);
     return sendResponse(res,200,"You are Signed up");
     } catch(e) {
         return sendResponse(res,500,"User already Exists");
@@ -89,6 +87,29 @@ userRouter.post("/signin", async function(req,res){
 
 
 });
+
+userRouter.get("/purchases", userMiddleware, async function(req, res) {
+    const userId = req.userId;
+
+    const purchases = await purchaseModel.find({
+        userId,
+    });
+
+    let purchasedCourseIds = [];
+
+    for (let i = 0; i<purchases.length;i++){ 
+        purchasedCourseIds.push(purchases[i].courseId)
+    }
+
+    const coursesData = await courseModel.find({
+        _id: { $in: purchasedCourseIds }
+    })
+
+    res.json({
+        purchases,
+        coursesData
+    })
+})
 
 module.exports = { 
     userRouter: userRouter
